@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Look up a block, Celestia Blob Archive</title>
+<meta name="description" content="Every blob of a Celestia block, its data, and a proof check you can run in your browser.">
+<meta name="theme-color" content="#040207">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..600&family=Hanken+Grotesk:wght@400;500;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+<style>
+  main { padding-bottom: 120px; }
+  /* finder */
+  .find { padding: 40px 0 0; }
+  .find h1 { display: none; }
+  .find form { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+  .find .pill { height: 46px; }
+  .find .examples { margin: 12px 0 0; font-size: 0.88rem; color: var(--faint); }
+  .find .examples a { color: var(--muted); }
+  .find.alone { position: relative; isolation: isolate; padding: 110px 0 140px; text-align: center; overflow: hidden; }
+  .find.alone h1 { display: block; margin: 0 auto 16px; font-size: clamp(2.2rem, 4.6vw, 3.8rem); }
+  .find.alone .lead { display: block; margin: 0 auto 44px; }
+  .find .lead { display: none; color: var(--muted); max-width: 52ch; }
+  .find.alone form { max-width: 820px; margin: 0 auto; text-align: left; }
+  .find.alone .art { position: absolute; left: 50%; top: 50%; width: 760px; transform: translate(-50%, -50%); opacity: 0.32; pointer-events: none; z-index: -1; }
+  .find .art { display: none; }
+  .find.alone .art { display: block; }
+  @media (max-width: 720px) {
+    .find form { grid-template-columns: minmax(0, 1fr); }
+    .find.alone { padding: 64px 0 80px; }
+  }
+
+  /* block header */
+  .bhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 20px; padding: 64px 0 28px; }
+  .bnet { margin: 0 0 12px; color: var(--faint); font-size: 0.95rem; }
+  .bhead h1 { font-size: clamp(2.3rem, 5vw, 4.2rem); }
+  .bstate { margin: 16px 0 0; color: var(--muted); max-width: 60ch; }
+  .bnav { display: flex; gap: 8px; }
+  .bnav .pill { gap: 6px; }
+  .facts { display: grid; grid-template-columns: 1.2fr 1.2fr 0.8fr 0.8fr; margin: 0; }
+  .facts > div { padding: 20px 22px; min-width: 0; }
+  .facts > div + div { border-left: 1px solid var(--line); }
+  .facts dt { font-size: 0.8rem; color: var(--faint); margin-bottom: 6px; }
+  .facts dd { margin: 0; font-size: 0.95rem; }
+  .hashv { font-family: var(--mono); font-size: 0.8rem !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 1000px) {
+    .facts { grid-template-columns: 1fr 1fr; }
+    .facts > div:nth-child(3) { border-left: 0; }
+    .facts > div:nth-child(n+3) { border-top: 1px solid var(--line); }
+  }
+  @media (max-width: 560px) {
+    .bhead { padding-top: 40px; }
+    .facts { grid-template-columns: minmax(0, 1fr); }
+    .facts > div + div { border-left: 0; border-top: 1px solid var(--line); }
+  }
+
+  .bpart { padding-top: 88px; }
+  .bpart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 10px 32px; margin-bottom: 24px; }
+  .bpart-head h2 { font-size: clamp(1.5rem, 2.6vw, 2.1rem); }
+  .bpart-head p { margin: 0; max-width: 52ch; font-size: 0.95rem; }
+  .nsnote { color: var(--muted); font-size: 0.92rem; }
+  .fibre-note { margin: 16px 0 0; padding: 14px 18px; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); font-size: 0.9rem; }
+  #nsnote .notice { margin-bottom: 20px; }
+
+  /* blob table */
+  .blobtbl { border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-raise); }
+  .blobtbl table { font-size: 0.92rem; }
+  .blobtbl th { padding: 16px 20px 12px; }
+  .blobtbl td { padding: 14px 20px; }
+  .blobtbl th:first-child, .blobtbl td:first-child { padding-left: 24px; }
+  .blobtbl tbody tr { cursor: pointer; }
+  .blobtbl tbody tr:last-child td { border-bottom: 0; }
+  .blobtbl tbody tr:hover td { background: rgba(255, 255, 255, 0.025); }
+  .blobtbl tbody tr[aria-selected="true"] td { background: rgba(124, 104, 242, 0.1); }
+  .blobtbl tbody tr[aria-selected="true"] td:first-child { box-shadow: inset 2px 0 0 var(--violet); }
+  .blobtbl td a.hash { text-decoration: none; color: var(--ink); }
+  .blobtbl td a.hash:hover { text-decoration: underline; }
+  .tag { display: inline-block; margin-top: 6px; font-size: 0.75rem; color: var(--violet-text); border: 1px solid rgba(165, 151, 255, 0.45); border-radius: 999px; padding: 0 8px; }
+  .c-short { display: none; }
+  .blobtbl td.num { white-space: nowrap; }
+  @media (max-width: 720px) { .opt, .nshex, .c-long { display: none; } .c-short { display: inline; } .blobtbl th, .blobtbl td { padding-left: 14px !important; padding-right: 10px; } }
+
+  /* proof */
+  .proof { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 48px; align-items: start; }
+  .sqfig { position: sticky; top: 88px; margin: 0; padding: 22px; }
+  .sqfig canvas { display: block; width: 100%; }
+  .sqlegend { display: flex; flex-wrap: wrap; gap: 4px 16px; list-style: none; margin: 16px 0 0; padding: 0; font-size: 0.8rem; color: var(--muted); }
+  .sqlegend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .k-blob { background: #7c68f2; } .k-other { background: #3d3670; } .k-tx { background: #5b5a70; }
+  .k-pad { background: #17151f; box-shadow: inset 0 0 0 1px #2a2a3a; }
+  .k-par { background: repeating-linear-gradient(135deg, #1d1b28 0 1px, #0e0c15 1px 5px); box-shadow: inset 0 0 0 1px #2a2a3a; }
+  .sqfig figcaption { margin-top: 12px; font-size: 0.84rem; color: var(--faint); line-height: 1.5; }
+  .zoomcap { margin: 20px 0 8px; font-size: 0.84rem; color: var(--faint); }
+  #zoom { display: block; }
+
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: st; position: relative; }
+  .steps > li { counter-increment: st; position: relative; padding: 0 0 36px 56px; }
+  .steps > li::before {
+    content: counter(st); position: absolute; left: 0; top: -2px; width: 32px; height: 32px; border-radius: 50%;
+    border: 1px solid var(--line); display: grid; place-items: center; font-family: var(--display); font-stretch: 125%; font-size: 0.85rem; color: var(--muted); background: var(--bg);
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .steps > li::after { content: ""; position: absolute; left: 16px; top: 34px; bottom: 2px; border-left: 1px solid var(--line); }
+  .steps > li:last-child::after { display: none; }
+  .steps > li.active::before { border-color: var(--violet); color: var(--ink); }
+  .claim { font-size: 1.08rem; margin: 0 0 8px; font-weight: 500; line-height: 1.45; }
+  .why { color: var(--muted); font-size: 0.94rem; margin: 0 0 14px; }
+  .claim .mono, .why .mono { font-size: 0.86em; color: var(--violet-text); }
+  .whos { display: flex; flex-wrap: wrap; gap: 8px; }
+  .who { font-size: 0.78rem; padding: 3px 11px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .who::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; background: currentColor; }
+  .w-browser { color: var(--violet-text); border-color: rgba(165, 151, 255, 0.45); }
+  .w-archive { color: var(--ink); border-color: rgba(253, 252, 255, 0.35); }
+  .w-node { border-style: dashed; }
+  .w-node::before { background: transparent; box-shadow: inset 0 0 0 1px currentColor; }
+  .w-bad { color: var(--bad); border-color: rgba(255, 138, 138, 0.5); }
+  .roots { list-style: none; margin: 4px 0 12px; padding: 0; font-size: 0.85rem; }
+  .roots li { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+  .roots li span:first-child { color: var(--faint); }
+  .roots .mono { overflow: hidden; text-overflow: ellipsis; }
+  .steps .codebox { margin: 4px 0 14px; }
+
+  .dataview { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #0a0811; margin-top: 6px; }
+  .dv-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .dv-actions { display: flex; gap: 6px; }
+  .seg { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 999px; }
+  .seg button { font: inherit; font-size: 0.78rem; padding: 3px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper-ink); }
+  .dump { margin: 0; padding: 14px 16px; font-family: var(--mono); font-size: 0.76rem; line-height: 1.75; color: #d6d2e6; overflow: auto; max-height: 360px; white-space: pre; }
+  .dump.text { white-space: pre-wrap; word-break: break-all; font-size: 0.8rem; }
+  .dump .off { color: #5d5b72; }
+  .dump .asc { color: var(--violet-text); }
+
+  .verdict { margin: 4px 0 0 56px; padding: 22px 24px; border-radius: 12px; border: 1px solid rgba(165, 151, 255, 0.4); background: rgba(124, 104, 242, 0.07); }
+  .verdict.bad { border-color: rgba(255, 138, 138, 0.45); background: rgba(255, 138, 138, 0.05); }
+  .verdict .vt { font-family: var(--display); font-stretch: 125%; font-weight: 500; letter-spacing: -0.015em; font-size: 1.08rem; margin: 0 0 8px; }
+  .verdict p.muted { margin: 0; font-size: 0.92rem; }
+  #out > .notice { margin-top: 56px; max-width: 760px; }
+
+  @media (max-width: 900px) {
+    .proof { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+    .sqfig { position: static; padding: 16px; }
+    .steps > li { padding-left: 46px; }
+    .verdict { margin-left: 0; }
+  }
+</style>
+<script>(function(d){d.classList.add("fl");var done=function(){d.classList.remove("fl")};setTimeout(done,900);if(d.fonts||document.fonts){var f=document.fonts;Promise.all([f.load("500 1em Archivo"),f.load("400 1em \"Hanken Grotesk\"")]).then(done,done)}})(document.documentElement)</script>
+</head>
+<body>
+<header class="top" data-ph aria-hidden="true"><div class="wrap"></div></header>
+<main>
+  <div class="wrap">
+    <section class="find" id="find" aria-labelledby="find-h">
+      <div class="art" id="find-art" aria-hidden="true"></div>
+      <h1 id="find-h">Look up a block</h1>
+      <p class="lead">Every blob in the block, its data, and a proof check that runs in your browser. The namespace is optional; with it, the page opens that blob directly.</p>
+      <form id="lookup" action="block.html" method="get" role="search">
+        <input type="hidden" name="net" id="f-net">
+        <label class="field">Height<input id="f-h" name="h" inputmode="numeric" autocomplete="off" spellcheck="false" required></label>
+        <label class="field">Namespace, optional<input class="mono" id="f-ns" name="ns" autocomplete="off" spellcheck="false" placeholder="base64 or hex"></label>
+        <button class="pill" type="submit">Open block</button>
+      </form>
+      <p class="examples" id="examples"></p>
+    </section>
+    <div id="out" aria-live="polite"><p class="loading" style="margin-top:56px">Reading the archive</p></div>
+  </div>
+</main>
+<script type="module">
+// Smooth, inertial wheel scrolling (Lenis, vendored as an ES module so it adds no globals).
+// Inner scrollers (tables, code) keep native scrolling; anchor links glide and stop below the
+// sticky header. Off with reduced motion.
+import Lenis from "./vendor/lenis.esm.js";
+if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  window.lenis = new Lenis({ lerp: 0.1, smoothWheel: true, allowNestedScroll: true, anchors: { offset: -80 }, autoRaf: true });
+}
+</script>
+<script src="site.js"></script>
+<script src="verify.js"></script>
+<script>chrome("block.html"); document.getElementById("find-art").innerHTML = sphereSVG({ size: 760, opacity: 0.9 });</script>
+<script src="block.js"></script>
+</body>
+</html>

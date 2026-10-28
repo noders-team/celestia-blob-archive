@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Use the archive, Celestia Blob Archive</title>
+<meta name="description" content="Read API endpoints, the op-alt-da fallback and the cba CLI for the Celestia blob archive.">
+<meta name="theme-color" content="#040207">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..600&family=Hanken+Grotesk:wght@400;500;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+<style>
+  .endpoints { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0 0 32px; }
+  .endpoint { padding: 24px 26px; }
+  .endpoint h3 { font-size: 1.05rem; margin-bottom: 16px; }
+  .endpoint dl { margin: 0; display: grid; gap: 12px; }
+  .endpoint dt { font-size: 0.8rem; color: var(--faint); }
+  .endpoint dd { margin: 2px 0 0; font-family: var(--mono); font-size: 0.84rem; overflow-wrap: anywhere; }
+  #files p { line-height: 1.8; }
+  .usesec { padding-top: 96px; }
+  .usesec > h2 { margin-bottom: 18px; }
+  .usesec .lede { margin-bottom: 28px; }
+  @media (max-width: 760px) { .endpoints { grid-template-columns: minmax(0, 1fr); } }
+</style>
+<script>(function(d){d.classList.add("fl");var done=function(){d.classList.remove("fl")};setTimeout(done,900);if(d.fonts||document.fonts){var f=document.fonts;Promise.all([f.load("500 1em Archivo"),f.load("400 1em \"Hanken Grotesk\"")]).then(done,done)}})(document.documentElement)</script>
+</head>
+<body>
+<header class="top" data-ph aria-hidden="true"><div class="wrap"></div></header>
+<main class="inner">
+  <header class="page-head"><div class="art" id="art"></div><div class="wrap">
+    <h1>Read old blobs the way you read new ones</h1>
+    <p class="lede">No account and no key. Everything here works for both networks; switch at the top to change the examples.</p>
+    <ul class="toc"><li><a href="#api">Read API</a></li><li><a href="#op">OP Stack rollups</a></li><li><a href="#cli">Verify and export</a></li><li><a href="#files">Raw files</a></li></ul>
+  </div></header>
+  <div class="wrap">
+    <section class="usesec prose" id="api" aria-labelledby="api-h" style="padding-top:24px">
+      <h2 id="api-h" class="sec-title">Read API</h2>
+      <p class="lede">The API answers celestia-node’s JSON-RPC for <code>blob.Get</code>, <code>blob.GetAll</code>, <code>blob.GetProof</code>, <code>blob.Included</code> and <code>header.GetByHeight</code>, with the same JSON a node returns. Point a client that already talks to a node at it.</p>
+      <div class="endpoints">
+        <div class="panel endpoint"><h3>Mainnet Beta</h3><dl><div><dt>Read API</dt><dd>https://<wbr>celestia-blobs-rpc<wbr>.noders<wbr>.services</dd></div><div><dt>Archive files</dt><dd>https://<wbr>celestia-blobs<wbr>.noders<wbr>.services</dd></div></dl></div>
+        <div class="panel endpoint"><h3>Mocha testnet</h3><dl><div><dt>Read API</dt><dd>https://<wbr>celestia-t-blobs-rpc<wbr>.noders<wbr>.services</dd></div><div><dt>Archive files</dt><dd>https://<wbr>celestia-t-blobs<wbr>.noders<wbr>.services</dd></div></dl></div>
+      </div>
+      <div class="two">
+        <div><h3 style="margin-top:0">Try it</h3><div id="curl"></div></div>
+        <div><h3 style="margin-top:0">What the errors mean</h3>
+          <p><code>blob: not found</code> comes back only when the archive holds the height and that blob is not in it, so a client can treat it as final. A height the archive has not reached yet, or an upstream problem, gets a different message that never contains “not found”, so op-alt-da and ev-node retry or ask another source. A blob withdrawn on legal request gets its own error pointing at <code>tombstones.json</code>.</p>
+          <p>Before serving a blob the API re-checks its share proof against the block’s stored data root. Limits: 16 calls per batch, 16 namespaces per <code>GetAll</code>, 20 requests per second per client. No WebSocket, so no <code>Subscribe</code>.</p></div>
+      </div>
+    </section>
+    <section class="usesec prose" id="op" aria-labelledby="op-h">
+      <h2 id="op-h" class="sec-title">OP Stack rollups: the op-alt-da fallback</h2>
+      <p class="lede">For OP Stack rollups that post to Celestia, the archive also writes each blob under the key op-alt-da’s S3 fallback reads. Add these flags to your da-server and it re-derives from the archive once Celestia has pruned the data.</p>
+      <div id="opflags"></div>
+      <h3>Namespaces kept this way</h3>
+      <div id="opns"><p class="loading">Reading op.json</p></div>
+      <p class="small">Running a rollup that is not listed? Write to <a href="mailto:abuse@noders.team">abuse@noders.team</a> with your namespace. Every blob is archived either way; the fallback keys are extra.</p>
+    </section>
+    <section class="usesec prose" id="cli" aria-labelledby="cli-h">
+      <h2 id="cli-h" class="sec-title">Verify and export with cba</h2>
+      <p class="lede">Build it from the repository with <code>make build</code>. <code>cba verify</code> reads the archive directly, takes the data root from a node you trust and checks the blob’s share proof under it. That is the check that does not depend on NODERS.</p>
+      <div id="verify"></div>
+      <p><code>cba export</code> writes every blob of a namespace in a height range to files. It checks each blob against the archive’s own records; use <code>cba verify</code> when you need proof of inclusion.</p>
+      <div id="export"></div>
+      <p>For a captured Fibre payload, <code>cba fibre verify</code> rederives the blob ID from the payment promise, checks the promise’s signature and re-encodes the payload to the paid commitment.</p>
+      <div id="fverify"></div>
+    </section>
+    <section class="usesec prose" id="files" aria-labelledby="files-h">
+      <h2 id="files-h" class="sec-title">Raw files</h2>
+      <p class="lede">The archive is plain objects over HTTPS. <code>manifest.json</code> says how far it reaches, <code>dir/</code> maps every height to its rows, each segment’s <code>.idx2</code> lists the namespace and commitment of every blob, and the <code>.seg</code> holds the records with their proofs. Finding one blob takes four range requests; the block page on this site does exactly that.</p>
+      <p>Format: <a href="https://github.com/noders-team/celestia-blob-archive/blob/main/docs/format.md">docs/format.md</a>. API reference: <a href="https://github.com/noders-team/celestia-blob-archive/blob/main/docs/api.md">docs/api.md</a>. Source: <a href="https://github.com/noders-team/celestia-blob-archive">github.com/<wbr>noders-team/<wbr>celestia-blob-archive</a>.</p>
+      <div id="rawlinks"></div>
+    </section>
+  </div>
+</main>
+<script type="module">
+// Smooth, inertial wheel scrolling (Lenis, vendored as an ES module so it adds no globals).
+// Inner scrollers (tables, code) keep native scrolling; anchor links glide and stop below the
+// sticky header. Off with reduced motion.
+import Lenis from "./vendor/lenis.esm.js";
+if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  window.lenis = new Lenis({ lerp: 0.1, smoothWheel: true, allowNestedScroll: true, anchors: { offset: -80 }, autoRaf: true });
+}
+</script>
+<script src="site.js"></script>
+<script>
+"use strict";
+chrome("use.html");
+$("#art").innerHTML = sphereSVG({ size: 520, opacity: 0.75 });
+const n = net(), N = NETS[n];
+const ex = n === "mainnet"
+  ? { h: 1435254, ns: "AAAAAAAAAAAAAAAAAAAAAAAAALz67w0250KL770=", c: "EjXeIenNuvfoSgyK3UBoX4Nqq8r6vWIdtJjUzcvJfRQ=" }
+  : { h: 1834013, ns: "AAAAAAAAAAAAAAAAAAAAAAAAAGNsYjVlZjdiYTg=", c: "<commitment>" };
+$("#curl").innerHTML = codebox(`curl -s ${N.api} \\\n  -H 'Content-Type: application/json' \\\n  -d '{"jsonrpc":"2.0","id":1,"method":"blob.GetAll","params":[${ex.h},["${ex.ns}"]]}'`) +
+  `<p class="small">Or open <a href="${withNet(`block.html?h=${ex.h}&ns=${encodeURIComponent(ex.ns)}`)}">the same blob on this site</a>.</p>`;
+$("#opflags").innerHTML = codebox(`--fallback.enabled --fallback.provider s3 --fallback.mode read_fallback \\\n--fallback.s3.endpoint ${NETS.mainnet.files} --fallback.s3.region auto \\\n--fallback.s3.bucket op --fallback.s3.prefix <namespace hex> \\\n--fallback.s3.credential-type anonymous`);
+$("#verify").innerHTML = codebox(`cba verify --archive ${N.files} \\\n  --height ${ex.h} --namespace ${ex.ns} \\\n  --commitment ${ex.c} \\\n  --rpc <your-consensus-node:9090>`);
+$("#export").innerHTML = codebox(`cba export --archive ${N.files} \\\n  --namespace ${ex.ns} --from <first height> --to <last height> --out ./blobs`);
+$("#fverify").innerHTML = codebox(`cba fibre verify --archive ${N.files} --height <height> --tx-index <tx index>`);
+$("#rawlinks").innerHTML = `<p><a href="${N.files}/manifest.json">${N.short} manifest.json</a>, <a href="${N.files}/op/_namespaces.json">op/_namespaces.json</a>, <a href="${N.files}/fibre/manifest.json">fibre/manifest.json</a></p>`;
+// names come from the rollups' own L1 batch inboxes; the list itself is live
+const OP_NAMES = { "866269ddf77dbc40ed9d": ["Manta Pacific", 335444], "000008b91d93e20b6a9c": ["Derive", 569593],
+  "00000584cb53884b3945": ["Orderly", 569951], "ca1de12a2bf10ef20a85": ["Towns", 4071540], "000002004e16e73c19eb": ["Nillion", 8976650] };
+(async () => {
+  try {
+    const j = await getJSON(`/data/mainnet/op.json`);
+    if (!j.namespaces.length) { $("#opns").innerHTML = `<p>No namespaces are kept under op-alt-da keys yet.</p>`; return; }
+    $("#opns").innerHTML = `<div class="tbl"><table><thead><tr><th>Rollup</th><th>Namespace, for <code>--fallback.s3.prefix</code></th><th class="r">First blob</th></tr></thead><tbody>
+      ${j.namespaces.map((hx) => {
+        const meta = OP_NAMES[hx.slice(-20)], b64v = bytesToB64(hexToBytes(hx));
+        return `<tr><td style="color:var(--ink)">${meta ? esc(meta[0]) : "Unnamed"}</td><td class="hash">${esc(hx)}</td>
+          <td class="r num">${meta ? `<a href="${withNet(`block.html?h=${meta[1]}&ns=${encodeURIComponent(b64v)}`, "mainnet")}">${fmtN(meta[1])}</a>` : "none"}</td></tr>`;
+      }).join("")}</tbody></table></div>
+      <p class="small">Mainnet only; on Mocha no rollup has been matched to a namespace yet. Updated ${fmtDateTime(Date.parse(j.updated_at))}.</p>`;
+  } catch (e) { $("#opns").innerHTML = `<p class="err">The namespace list could not be read (${esc(e.message)}). The raw file is <a href="${NETS.mainnet.files}/op/_namespaces.json">op/_namespaces.json</a>.</p>`; }
+})();
+</script>
+</body>
+</html>

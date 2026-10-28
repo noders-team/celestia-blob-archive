@@ -1,0 +1,58 @@
+# Celestia blob archive Fibre capture for Celestia mainnet.
+#
+# Install: the same /usr/local/bin/cba-ingester as the ingester (one build,
+# restart both units on upgrade), system user "cba", the ingester's
+# /etc/celestia-blob-archive/mainnet.env (CBA_GRPC is also the fibre client's
+# state address, always plaintext; CBA_GRPC_TLS=true is refused). Metrics
+# listen on all interfaces; the host firewall lets only the monitoring hosts
+# reach :9471.
+#
+# State directory /var/lib/cba-fibre-mainnet (StateDirectory=, writable under
+# ProtectSystem=strict): state.json (scan position, pending items, the day's
+# cap) and spool/. Never delete it while items are pending; it holds
+# downloaded payloads not yet in R2 (cba_fibre_pending > 0 or
+# cba_fibre_spool_bytes > 0).
+#
+# Exit status 3 means a restart cannot help: the node or state.json belongs to
+# another chain, a record conflicts with the one already stored, or an
+# immutable object exists with different bytes. RestartPreventExitStatus=3
+# keeps the unit failed; [CBA] Fibre metrics endpoint is unavailable fires.
+# Read the cause in the journal, then start it by hand. Any other error exits
+# 1 and is restarted after RestartSec.
+
+[Unit]
+Description=Celestia blob archive Fibre capture (mainnet)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=cba
+Group=cba
+EnvironmentFile=/etc/celestia-blob-archive/mainnet.env
+ExecStart=/usr/local/bin/cba-ingester fibre-capture \
+    -chain-id celestia \
+    -download-workers 2 \
+    -metrics-addr 0.0.0.0:9471
+StateDirectory=cba-fibre-mainnet
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=3
+TimeoutStopSec=60
+MemoryMax=4G
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

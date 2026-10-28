@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fibre captures, Celestia Blob Archive</title>
+<meta name="description" content="Fibre payloads live on validators for four hours. The archive captures them inside that window.">
+<meta name="theme-color" content="#040207">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..600&family=Hanken+Grotesk:wght@400;500;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+<style>
+  .count { margin: 22px 0 0; padding-top: 18px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 0.92rem; }
+  .count b { color: var(--ink); font-weight: 500; }
+  .band-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin-bottom: 14px; font-size: 0.92rem; }
+  .band-head span { color: var(--faint); }
+  .fibre-list td .faint { font-size: 0.82rem; }
+</style>
+<script>(function(d){d.classList.add("fl");var done=function(){d.classList.remove("fl")};setTimeout(done,900);if(d.fonts||document.fonts){var f=document.fonts;Promise.all([f.load("500 1em Archivo"),f.load("400 1em \"Hanken Grotesk\"")]).then(done,done)}})(document.documentElement)</script>
+</head>
+<body>
+<header class="top" data-ph aria-hidden="true"><div class="wrap"></div></header>
+<main class="inner">
+  <header class="page-head"><div class="art" id="art"></div><div class="wrap">
+    <h1>Fibre keeps data for four hours. The archive catches it in time.</h1>
+    <p class="lede">Fibre payloads never enter the data square. A Pay-for-Fibre transaction on chain carries the payment promise and the validators’ signatures; the payload sits on validators’ Fibre servers and is deleted after 4 hours. The archive follows the chain head, downloads every payload while it is still there, checks it against the paid commitment and keeps it next to the promise.</p>
+  </div></header>
+  <div class="wrap">
+    <section class="panel netpanel" aria-labelledby="band-h">
+      <div class="band-head"><b id="band-h" style="font-weight:500">Since capture began</b><span id="band-sub"></span></div>
+      <div id="band"></div>
+      <p class="count" id="count" role="status"><span class="loading">Reading the Fibre manifest</span></p>
+    </section>
+    <section class="block-sec" aria-labelledby="list-h">
+      <h2 id="list-h">Captured messages, newest first</h2>
+      <div id="list"><p class="loading">Reading the Fibre index</p></div>
+    </section>
+    <section class="block-sec two prose" aria-label="What a capture holds">
+      <div>
+        <h2 class="sec-title">What each capture keeps</h2>
+        <p>The payload, byte for byte, stored once per blob ID. Next to it, a record with the raw transaction (payment promise and validator signatures), the block time, when it was captured and its status: <b>archived</b>, <b>expired</b> (gone before it could be fetched), <b>unrecoverable</b> (failed the check), <b>withdrawn</b> or <b>skipped</b> (over the daily cap).</p>
+        <p>A later stage adds the transaction’s share proof against the block’s data root and the validator set, so the quorum can be checked too.</p>
+      </div>
+      <div>
+        <h2 class="sec-title">Check one yourself</h2>
+        <p>The CLI rederives the blob ID from the promise, checks the escrow owner’s signature and re-encodes the payload to the paid commitment:</p>
+        <div id="verify"></div>
+      </div>
+    </section>
+  </div>
+</main>
+<script type="module">
+// Smooth, inertial wheel scrolling (Lenis, vendored as an ES module so it adds no globals).
+// Inner scrollers (tables, code) keep native scrolling; anchor links glide and stop below the
+// sticky header. Off with reduced motion.
+import Lenis from "./vendor/lenis.esm.js";
+if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  window.lenis = new Lenis({ lerp: 0.1, smoothWheel: true, allowNestedScroll: true, anchors: { offset: -80 }, autoRaf: true });
+}
+</script>
+<script src="site.js"></script>
+<script>
+"use strict";
+chrome("fibre.html");
+$("#art").innerHTML = sphereSVG({ size: 520, opacity: 0.75 });
+const n = net(), N = NETS[n];
+const KIND = { pff: "Pay for Fibre", timeout: "Promise timeout" };
+(async () => {
+  let f, S;
+  $("#verify").innerHTML = codebox(`cba fibre verify --archive ${N.files} \\\n  --height <height> --tx-index <tx index>`);
+  try { [f, S] = await Promise.all([fibreManifest(n), netState(n)]); }
+  catch (e) { $("#count").innerHTML = `<span class="err">The Fibre manifest could not be read (${esc(e.message)}). Reload in a minute.</span>`; $("#list").innerHTML = ""; return; }
+  if (!f) { $("#count").textContent = `Fibre capture is not running on ${N.label}.`; $("#list").innerHTML = ""; return; }
+  if (f.fibre_format !== 1) { $("#count").textContent = `This page reads Fibre format 1; the archive reports format ${f.fibre_format}.`; return; }
+  const startT = S.clock.t(f.first_height);
+  const from = Math.max(startT - HOUR, S.now - 3 * DAY);
+  $("#band-sub").textContent = `${fmtDateTime(startT)} to now`;
+  const buckets = [];
+  for (let b = Math.floor((f.first_height - 1) / 10000); b <= Math.floor((f.scanned_until - 1) / 10000); b++) buckets.push(b);
+  const parts = await Promise.all(buckets.map((b) => getJSON(`/data/${n}/fibre/index/${String(b).padStart(8, "0")}.json`, { allow404: true }).catch((e) => ({ error: e }))));
+  const failed = parts.filter((p) => p && p.error).length;
+  const entries = parts.flatMap((p) => (p && p.entries) || []).sort((a, b) => b.height - a.height || b.tx_index - a.tx_index);
+  timeline($("#band"), { S, from, to: S.now, lanes: ["fibre", "archive"], laneH: 18, fibre: entries,
+    notes: [{ t: S.now - FIBRE_WINDOW, lane: "fibre", text: "Left of this line it is gone from validators", short: "4 hours" },
+      ...(startT > from ? [{ t: startT, lane: "archive", text: "Capture began", short: "Start" }] : [])],
+    ariaLabel: `${N.label} Fibre timeline. Arrow keys move, Enter opens the block.` });
+  const c = f.counts || {}, total = Object.values(c).reduce((a, b) => a + b, 0);
+  const other = Object.entries(c).filter(([k]) => k !== "archived").map(([k, v]) => `${fmtN(v)} ${k.replace("_", " ")}`);
+  $("#count").innerHTML = total
+    ? `Since height ${fmtN(f.first_height)}, capture has checked every Fibre message on ${esc(N.label)} up to ${fmtN(f.scanned_until)}. <b>${fmtN(c.archived || 0)} payloads kept</b>, ${fmtBytes(f.bytes_archived || 0)} in all${other.length ? `; ${other.join(", ")}` : ", none missed"}.` +
+      (f.pending ? ` ${fmtN(f.pending)} still being fetched.` : "") + ` Updated ${fmtSpan(Date.now() - Date.parse(f.updated_at))} ago.`
+    : `Capture has watched ${esc(N.label)} from height ${fmtN(f.first_height)} to ${fmtN(f.scanned_until)} and has not seen a Fibre message yet. When one is posted it appears here within a minute.` +
+      (n === "mainnet" ? ` Fibre is already in use on <a href="${withNet("fibre.html", "mocha")}">Mocha</a>.` : "");
+  if (!entries.length) {
+    $("#list").innerHTML = `<p class="muted">No captured messages on ${esc(N.label)} yet.${failed ? " Some index files could not be read; reload to retry." : ""}</p>`;
+    return;
+  }
+  const shown = entries.slice(0, 60), FIRST = 12;
+  $("#list").innerHTML = `<div class="tbl panel fibre-list" style="padding:8px 22px"><table><thead><tr><th style="padding-top:14px">Height</th><th style="padding-top:14px">Kind</th><th style="padding-top:14px">Namespace</th><th class="r" style="padding-top:14px">Size</th><th style="padding-top:14px">Status</th></tr></thead><tbody>
+    ${shown.map((e, i) => {
+      const ns = hexToBytes(e.namespace), lbl = nsLabel(ns), t = S.clock.t(e.height);
+      return `<tr${i >= FIRST ? " hidden" : ""}><td class="num"><a href="${withNet(`block.html?h=${e.height}`)}">${fmtN(e.height)}</a><br><span class="faint">tx ${e.tx_index}, ${fmtDate(t)} ${fmtTime(t)}</span></td>
+        <td>${KIND[e.kind] || esc(e.kind)}</td>
+        <td>${lbl ? `<span class="nsname">${esc(lbl)}</span>` : ""}<span class="hash">${esc(bytesToB64(ns))}</span></td>
+        <td class="r num">${e.data === "archived" ? fmtBytes(e.data_size) : `${fmtBytes(e.blob_size)} paid`}</td>
+        <td>${e.data === "archived" ? `Kept. <a href="${N.files}/fibre/data/${esc(e.blob_id)}">Payload</a>` : esc(e.data.replace("_", " "))}</td></tr>`;
+    }).join("")}</tbody></table></div>
+    ${shown.length > FIRST ? `<p style="margin-top:16px"><button class="quiet" type="button" id="more">Show ${shown.length - FIRST} more</button></p>` : ""}
+    ${entries.length > shown.length ? `<p class="small muted">The page shows the newest ${shown.length} of ${fmtN(entries.length)}.</p>` : ""}
+    ${failed ? `<p class="small err">Some index files could not be read; the list may be incomplete. Reload to retry.</p>` : ""}`;
+  $("#more")?.addEventListener("click", (ev) => { document.querySelectorAll("#list tr[hidden]").forEach((tr) => (tr.hidden = false)); ev.target.parentElement.remove(); });
+})();
+</script>
+</body>
+</html>

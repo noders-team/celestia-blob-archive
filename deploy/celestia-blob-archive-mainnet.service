@@ -1,0 +1,52 @@
+# Celestia blob archive ingester for Celestia mainnet.
+#
+# Install: binary at /usr/local/bin/cba-ingester, system user "cba",
+# /etc/celestia-blob-archive/mainnet.env (mode 0600, owner root) from
+# deploy/ingester.env.example. Metrics listen on all interfaces; the host
+# firewall lets only the monitoring hosts reach :9467.
+#
+# Exit status 3 means a restart cannot help: a block that cannot be processed
+# (a data-root mismatch, or any other deterministic processing error) or a
+# catalog overlap (a bug). RestartPreventExitStatus=3
+# keeps the unit failed instead of restarting every RestartSec and re-fetching
+# the same range from the node. Alert on cba_data_root_mismatch_total and on the
+# unit being failed. Investigate the logged height, then start it by hand.
+# Any other error exits 1 and is restarted after RestartSec.
+
+[Unit]
+Description=Celestia blob archive ingester (mainnet)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=cba
+Group=cba
+EnvironmentFile=/etc/celestia-blob-archive/mainnet.env
+ExecStart=/usr/local/bin/cba-ingester \
+    -chain-id celestia \
+    -workers 4 \
+    -max-workers 12 \
+    -latency-target 2s \
+    -metrics-addr 0.0.0.0:9467
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=3
+# On stop an in-flight segment commit (up to 90 s) and the final commit of
+# the tail's open segment (up to 90 s) must both fit.
+TimeoutStopSec=210
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

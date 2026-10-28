@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coverage, Celestia Blob Archive</title>
+<meta name="description" content="Which heights of Celestia Mainnet Beta and Mocha the archive holds, range by range.">
+<meta name="theme-color" content="#040207">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..600&family=Hanken+Grotesk:wght@400;500;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+<style>
+  .zoomrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 22px; }
+  .zoomrow .hint { color: var(--faint); font-size: 0.85rem; }
+  .vol-cap { margin: 24px 0 8px; font-size: 0.82rem; color: var(--faint); }
+  .vol { display: block; width: 100%; }
+  .cov-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 32px 56px; margin-top: 36px; }
+  .cov-cols h3 { margin-bottom: 14px; font-size: 1.05rem; }
+  .ranges { max-height: 420px; overflow: auto; }
+  .ranges tr.gap td { color: var(--faint); }
+  @media (max-width: 860px) { .cov-cols { grid-template-columns: minmax(0, 1fr); } }
+  .tbl.ranges { max-height: 440px; overflow: auto; }
+  /* while a network loads, its panel already takes about the height it will have */
+  .netpanel:has(> .loading) { min-height: 820px; }
+  @media (max-width: 760px) { .netpanel:has(> .loading) { min-height: 1250px; } }
+</style>
+<script>(function(d){d.classList.add("fl");var done=function(){d.classList.remove("fl")};setTimeout(done,900);if(d.fonts||document.fonts){var f=document.fonts;Promise.all([f.load("500 1em Archivo"),f.load("400 1em \"Hanken Grotesk\"")]).then(done,done)}})(document.documentElement)</script>
+</head>
+<body>
+<header class="top" data-ph aria-hidden="true"><div class="wrap"></div></header>
+<main class="inner">
+  <header class="page-head"><div class="art" id="art"></div><div class="wrap">
+    <h1>What the archive holds</h1>
+    <p class="lede">Each band runs from the network’s first block to now. Violet is archived and readable here; hatched is not archived yet. Drag across a band to look closer, click a point to open that block.</p>
+  </div></header>
+  <div class="wrap">
+    <div id="nets"></div>
+  </div>
+</main>
+<script type="module">
+// Smooth, inertial wheel scrolling (Lenis, vendored as an ES module so it adds no globals).
+// Inner scrollers (tables, code) keep native scrolling; anchor links glide and stop below the
+// sticky header. Off with reduced motion.
+import Lenis from "./vendor/lenis.esm.js";
+if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  window.lenis = new Lenis({ lerp: 0.1, smoothWheel: true, allowNestedScroll: true, anchors: { offset: -80 }, autoRaf: true });
+}
+</script>
+<script src="site.js"></script>
+<script>
+"use strict";
+chrome("coverage.html");
+$("#art").innerHTML = sphereSVG({ size: 520, opacity: 0.75 });
+const order = net() === "mocha" ? ["mocha", "mainnet"] : ["mainnet", "mocha"];
+function volume(host, S, from, to) {
+  const W = Math.max(280, host.clientWidth), B = Math.max(30, Math.min(160, Math.floor(W / 7))), Hh = 56;
+  const bins = new Float64Array(B), span = to - from;
+  for (const [f, l, sz] of S.cat.segs) {
+    const tf = S.clock.t(f), tl = S.clock.t(l + 1);
+    if (tl < from || tf > to) continue;
+    const a = Math.max(from, tf), b = Math.min(to, tl), whole = Math.max(1, tl - tf);
+    const ia = Math.min(B - 1, Math.floor(((a - from) / span) * B)), ib = Math.min(B - 1, Math.floor(((b - from) / span) * B));
+    for (let i = ia; i <= ib; i++) {
+      const lo = Math.max(a, from + (i / B) * span), hi = Math.min(b, from + ((i + 1) / B) * span);
+      if (hi > lo) bins[i] += (sz * (hi - lo)) / whole;
+    }
+  }
+  const max = Math.max(...bins) || 1, bw = W / B;
+  let bars = "";
+  bins.forEach((v, i) => { if (v > 0) { const h = Math.max(1, (v / max) * Hh); bars += `<rect x="${(i * bw).toFixed(1)}" y="${(Hh - h).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${h.toFixed(1)}" rx="1" fill="#7c68f2" opacity="0.8"></rect>`; } });
+  host.innerHTML = `<p class="vol-cap">Data archived per ${fmtSpan(span / B).replace(/^1 /, "")}; the tallest bar is ${fmtBytes(max)}</p>
+    <svg class="vol" viewBox="0 0 ${W} ${Hh + 1}" height="${Hh + 1}" aria-hidden="true">${bars}<line x1="0" x2="${W}" y1="${Hh + 0.5}" y2="${Hh + 0.5}" stroke="#3a3949"></line></svg>`;
+}
+function section(n) {
+  const sec = document.createElement("section");
+  sec.className = "panel netpanel"; sec.id = n;
+  sec.innerHTML = `<h2>${NETS[n].label}</h2><p class="loading">Reading the catalog</p>`;
+  $("#nets").append(sec);
+  return fill(n, sec);
+}
+async function fill(n, sec) {
+  const N = NETS[n];
+  let S;
+  try { S = await netState(n); }
+  catch (e) { sec.querySelector(".loading").outerHTML = `<p class="err">The ${esc(N.short)} catalog could not be read (${esc(e.message)}). Reload in a minute.</p>`; return; }
+  const { m, cat, clock, now } = S;
+  const views = [["Whole history", clock.genesis, now], ["Last 45 days", now - 45 * DAY, now], ["Last 8 hours", now - 8 * HOUR, now]];
+  sec.innerHTML = `<h2>${N.label}</h2>
+    <div class="zoomrow"><div class="seg" role="group" aria-label="${esc(N.short)} time range">
+      ${views.map(([l], i) => `<button type="button" data-v="${i}" aria-pressed="${i === 0}">${l}</button>`).join("")}</div>
+      <span class="hint" data-range></span></div>
+    <div data-band></div>
+    <div data-vol></div>
+    <div class="cov-cols">
+      <div><h3>In numbers</h3><dl class="facts-list" data-facts></dl></div>
+      <div><h3>Archived ranges</h3><div class="tbl ranges"><table><thead><tr><th>From</th><th>To</th><th class="r">Heights</th></tr></thead><tbody data-ranges></tbody></table></div></div>
+    </div>`;
+  let cur = [clock.genesis, now];
+  const band = timeline(sec.querySelector("[data-band]"), { S, from: cur[0], to: cur[1], lanes: ["archive", "network"], laneH: 22,
+    notes: m.contiguous_until < m.highest_height - 20000 ? [n === "mainnet"
+      ? { t: clock.t(m.contiguous_until), lane: "archive", text: `Backfill at ${fmtN(m.contiguous_until)}`, short: "Backfill" }
+      : { t: clock.t(m.contiguous_until), lane: "archive", text: `Gap after ${fmtN(m.contiguous_until)}, still to fill`, short: "Gap" }] : [],
+    zoom: (a, b) => show(a, b, -1), onEscape: () => show(clock.genesis, now, 0),
+    ariaLabel: `${N.label} coverage. Arrow keys move, Enter opens the block, Escape shows the whole history.` });
+  const volHost = sec.querySelector("[data-vol]");
+  function show(a, b, vi) {
+    a = Math.max(clock.genesis, a); b = Math.min(now, b);
+    if (b - a < 10 * 60e3) b = a + 10 * 60e3;
+    cur = [a, b];
+    band.set({ from: a, to: b });
+    volume(volHost, S, a, b);
+    sec.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.v === vi)));
+    sec.querySelector("[data-range]").textContent = vi === 0 ? "Drag across the band to zoom in."
+      : `Heights ${fmtN(Math.max(1, clock.h(a)))} to ${fmtN(Math.min(S.chainHead, clock.h(b)))}. Escape returns to the whole history.`;
+  }
+  sec.querySelectorAll(".seg button").forEach((x) => x.addEventListener("click", () => { const v = views[+x.dataset.v]; show(v[1], v[2], +x.dataset.v); }));
+  show(clock.genesis, now, 0);
+  new ResizeObserver(() => volume(volHost, S, cur[0], cur[1])).observe(volHost);
+  const pct = (100 * cat.heights) / m.highest_height;
+  sec.querySelector("[data-facts]").innerHTML = `
+    <dt>Heights archived</dt><dd>${fmtN(cat.heights)} (${pct.toFixed(1)}%)</dd>
+    <dt>Gapless from genesis to</dt><dd><a href="${withNet(`block.html?h=${m.contiguous_until}`, n)}">${fmtN(m.contiguous_until)}</a></dd>
+    <dt>Newest archived height</dt><dd><a href="${withNet(`block.html?h=${m.highest_height}`, n)}">${fmtN(m.highest_height)}</a></dd>
+    <dt>Network head, estimated</dt><dd>${fmtN(S.chainHead)}</dd>
+    <dt>Stored</dt><dd>${fmtBytes(cat.bytes)} in ${fmtN(cat.segs.length)} segments</dd>
+    <dt>Manifest updated</dt><dd>${fmtSpan(Date.now() - Date.parse(m.updated_at))} ago</dd>
+    <dt>Raw files</dt><dd><a href="${N.files}/manifest.json">manifest</a>, <a href="${N.files}/catalog/00000000.json">catalog</a></dd>`;
+  const rows = [];
+  cat.ranges.forEach(([f, l], i) => {
+    if (i > 0) {
+      const gf = cat.ranges[i - 1][1] + 1, gl = f - 1;
+      rows.push(`<tr class="gap"><td class="num">${fmtN(gf)}</td><td class="num">${fmtN(gl)}</td><td class="r num">${fmtN(gl - gf + 1)} not yet</td></tr>`);
+    }
+    rows.push(`<tr><td class="num"><a href="${withNet(`block.html?h=${f}`, n)}">${fmtN(f)}</a><br><span class="small faint">${fmtDate(clock.t(f))}</span></td>
+      <td class="num"><a href="${withNet(`block.html?h=${l}`, n)}">${fmtN(l)}</a><br><span class="small faint">${fmtDate(clock.t(l))}</span></td>
+      <td class="r num">${fmtN(l - f + 1)}</td></tr>`);
+  });
+  const last = cat.ranges[cat.ranges.length - 1][1];
+  if (S.chainHead > last) rows.push(`<tr class="gap"><td class="num">${fmtN(last + 1)}</td><td>head</td><td class="r">being captured</td></tr>`);
+  sec.querySelector("[data-ranges]").innerHTML = rows.join("");
+}
+order.forEach(section);
+</script>
+</body>
+</html>

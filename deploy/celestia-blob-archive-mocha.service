@@ -1,0 +1,51 @@
+# Celestia blob archive ingester for the mocha-5 testnet.
+#
+# Install: binary at /usr/local/bin/cba-ingester, system user "cba",
+# /etc/celestia-blob-archive/mocha.env (mode 0600, owner root) from
+# deploy/ingester.env.example.
+#
+# Exit status 3 means a restart cannot help: a block that cannot be processed
+# (a data-root mismatch, or any other deterministic processing error) or a
+# catalog overlap (a bug). RestartPreventExitStatus=3
+# keeps the unit failed instead of restarting every RestartSec and re-fetching
+# the same range from the node. Alert on cba_data_root_mismatch_total and on the
+# unit being failed. Investigate the logged height, then start it by hand.
+# Any other error exits 1 and is restarted after RestartSec.
+
+[Unit]
+Description=Celestia blob archive ingester (mocha-5)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=cba
+Group=cba
+EnvironmentFile=/etc/celestia-blob-archive/mocha.env
+ExecStart=/usr/local/bin/cba-ingester \
+    -chain-id mocha-5 \
+    -workers 4 \
+    -max-workers 8 \
+    -latency-target 2s \
+    -metrics-addr 127.0.0.1:9466
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=3
+# On stop an in-flight segment commit (up to 90 s) and the final commit of
+# the tail's open segment (up to 90 s) must both fit.
+TimeoutStopSec=210
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

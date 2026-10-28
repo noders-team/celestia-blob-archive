@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Removals, Celestia Blob Archive</title>
+<meta name="description" content="How to ask for a blob to be removed from the Celestia blob archive, and every removal so far.">
+<meta name="theme-color" content="#040207">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..600&family=Hanken+Grotesk:wght@400;500;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+<style>
+  .contact { display: inline-flex; margin: 8px 0 22px; }
+  .rsteps { list-style: none; counter-reset: r; padding: 0; margin: 0; }
+  .rsteps li { counter-increment: r; position: relative; padding: 0 0 18px 40px; }
+  .rsteps li::before { content: counter(r); position: absolute; left: 0; top: 1px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 0.78rem; color: var(--muted); }
+  .rlist h3 { margin: 0 0 10px; font-size: 1.05rem; }
+  .rlist > div + div { margin-top: 28px; }
+  .rsteps li + li, .rlist li + li { margin-top: 8px; }
+</style>
+<script>(function(d){d.classList.add("fl");var done=function(){d.classList.remove("fl")};setTimeout(done,900);if(d.fonts||document.fonts){var f=document.fonts;Promise.all([f.load("500 1em Archivo"),f.load("400 1em \"Hanken Grotesk\"")]).then(done,done)}})(document.documentElement)</script>
+</head>
+<body>
+<header class="top" data-ph aria-hidden="true"><div class="wrap"></div></header>
+<main class="inner">
+  <header class="page-head"><div class="art" id="art"></div><div class="wrap">
+    <h1>Asking for data to be removed</h1>
+    <p class="lede">Everything posted to Celestia is public, and the archive keeps it so it can still be read after the network forgets it. We remove an archived blob when there is a legitimate legal reason, and we list every removal publicly.</p>
+  </div></header>
+  <div class="wrap">
+    <div class="two prose">
+      <section class="panel netpanel" aria-labelledby="ask-h" style="margin:0">
+        <h2 id="ask-h" class="sec-title">How to ask</h2>
+        <a class="pill contact" href="mailto:abuse@noders.team">abuse@noders.team</a>
+        <p>Include what identifies the blob and why it should go:</p>
+        <ul>
+          <li>the network (Mainnet Beta or Mocha) and the block height;</li>
+          <li>the namespace and commitment, or the Fibre blob ID; the block page shows both;</li>
+          <li>the legal basis for the request and who is making it.</li>
+        </ul>
+        <p>We answer every request. If we cannot act on it, we say why.</p>
+      </section>
+      <section aria-labelledby="what-h">
+        <h2 id="what-h" class="sec-title">What a removal does</h2>
+        <ol class="rsteps">
+          <li>The blob is added to the network’s <code>tombstones.json</code> with the date and reason. Entries are never taken off that list.</li>
+          <li>Within a minute the read API stops serving it and answers “withdrawn” instead, so rollup clients look elsewhere rather than treat it as never posted.</li>
+          <li>The blob’s record is overwritten in place with a marker of the same length. Its data, signer and proof are gone; every other blob and proof in the archive stays checkable.</li>
+          <li>Copies in downstream caches expire within a day; op-alt-da fallback objects within 5 minutes.</li>
+        </ol>
+        <p>The archive cannot remove anything from Celestia itself, or from other archives and nodes that hold the same block.</p>
+      </section>
+    </div>
+    <section class="block-sec prose" aria-labelledby="list-h">
+      <h2 id="list-h">Removals so far</h2>
+      <div id="lists" class="rlist"></div>
+    </section>
+  </div>
+</main>
+<script type="module">
+// Smooth, inertial wheel scrolling (Lenis, vendored as an ES module so it adds no globals).
+// Inner scrollers (tables, code) keep native scrolling; anchor links glide and stop below the
+// sticky header. Off with reduced motion.
+import Lenis from "./vendor/lenis.esm.js";
+if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  window.lenis = new Lenis({ lerp: 0.1, smoothWheel: true, allowNestedScroll: true, anchors: { offset: -80 }, autoRaf: true });
+}
+</script>
+<script src="site.js"></script>
+<script>
+"use strict";
+chrome("removals.html");
+$("#art").innerHTML = sphereSVG({ size: 520, opacity: 0.75 });
+const order = net() === "mocha" ? ["mocha", "mainnet"] : ["mainnet", "mocha"];
+(async () => {
+  for (const n of order) {
+    const N = NETS[n], box = document.createElement("div");
+    box.innerHTML = `<h3>${N.label}</h3><p class="loading">Reading tombstones.json</p>`;
+    $("#lists").append(box);
+    try {
+      const t = await tombstones(n);
+      const blobs = t.tombstones || [], fibre = t.fibre || [];
+      if (t.missing || (!blobs.length && !fibre.length)) {
+        box.innerHTML = `<h3>${N.label}</h3><p>No removals. <code>tombstones.json</code> ${t.missing ? "does not exist yet; it is created with the first removal at" : "is empty at"} <a href="${N.files}/tombstones.json">${N.files.replace("https://", "")}/tombstones.json</a>.</p>`;
+        continue;
+      }
+      box.innerHTML = `<h3>${N.label}</h3><p class="small">${blobs.length + fibre.length} removals, from <a href="${N.files}/tombstones.json">tombstones.json</a>.</p>
+        <div class="tbl"><table><thead><tr><th>Date</th><th>Height</th><th>Namespace and commitment</th><th>Reason</th></tr></thead><tbody>
+        ${blobs.map((x) => `<tr><td class="num">${esc(x.date)}</td><td class="num"><a href="${withNet(`block.html?h=${+x.height}`, n)}">${fmtN(+x.height)}</a></td>
+          <td><span class="hash">${esc(x.namespace)}</span><br><span class="hash">${esc(x.commitment)}</span></td><td>${esc(x.reason || "")}</td></tr>`).join("")}
+        ${fibre.map((x) => `<tr><td class="num">${esc(x.date || "")}</td><td>Fibre</td><td><span class="hash">${esc(x.blob_id || "")}</span></td><td>${esc(x.reason || "")}</td></tr>`).join("")}
+        </tbody></table></div>`;
+    } catch (e) {
+      box.innerHTML = `<h3>${N.label}</h3><p class="err">tombstones.json could not be read (${esc(e.message)}). The file is at <a href="${N.files}/tombstones.json">${N.files.replace("https://", "")}/tombstones.json</a>.</p>`;
+    }
+  }
+})();
+</script>
+</body>
+</html>

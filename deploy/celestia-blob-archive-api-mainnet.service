@@ -1,0 +1,46 @@
+# Celestia blob archive read API for Celestia mainnet.
+#
+# Install: binary at /usr/local/bin/cba-api, system user "cba-api" (no home,
+# no shell). No EnvironmentFile: the API reads the public archive and holds no
+# credentials. JSON-RPC listens on loopback behind nginx
+# (deploy/nginx/celestia-blobs-rpc.conf); metrics listen on all interfaces and
+# the host firewall lets only the monitoring hosts reach :9469.
+#
+# On SIGTERM the API drains requests for up to 35 s (one per-call timeout of
+# 30 s plus margin), hence TimeoutStopSec=40.
+
+[Unit]
+Description=Celestia blob archive read API (mainnet)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=cba-api
+Group=cba-api
+ExecStart=/usr/local/bin/cba-api \
+    -archive https://celestia-blobs.noders.services \
+    -chain-id celestia \
+    -listen 127.0.0.1:8471 \
+    -metrics-addr 0.0.0.0:9469
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=40
+MemoryMax=3G
+# Soft heap limit below MemoryMax: the GC works harder before the cgroup kills.
+Environment=GOMEMLIMIT=2560MiB
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

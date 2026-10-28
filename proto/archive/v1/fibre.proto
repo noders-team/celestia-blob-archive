@@ -1,0 +1,33 @@
+// Fibre records of the Celestia blob archive (fibre/records/*.pb, see
+// docs/format.md, Fibre). Outside format_version 2.
+syntax = "proto3";
+
+package archive.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// One Fibre message (MsgPayForFibre or MsgPaymentPromiseTimeout) found on chain.
+message FibreRecord {
+  uint64 height = 1;                        // block holding the tx
+  uint32 tx_index = 2;                      // index in block.data.txs
+  uint32 kind = 3;                          // 1 = MsgPayForFibre, 2 = MsgPaymentPromiseTimeout
+  bytes  tx = 4;                            // raw tx bytes: promise (+ validator_signatures for kind 1)
+  // Proof stage (not written by capture; field numbers fixed):
+  uint32 tx_share_start = 5;                // compact-share range of the tx in the ODS
+  uint32 tx_share_end = 6;
+  bytes  tx_share_proof = 7;                // celestia.core.v1.proof.ShareProof vs data_hash(height)
+  bytes  system_blob_proof = 8;             // ShareProof of the share-v2 system blob (kind 1)
+  uint32 system_blob_start = 9;
+  uint32 system_blob_end = 10;
+  bytes  validator_set = 11;                // tendermint.types.ValidatorSet at promise.height+1
+  // Capture:
+  uint32 data_status = 12;                  // 1 archived, 2 expired, 3 unrecoverable, 4 withdrawn, 5 skipped_cap
+  uint64 data_size = 13;                    // payload length when archived
+  bytes  data_sha256 = 14;                  // convenience; the commitment is the proof
+  google.protobuf.Timestamp captured_at = 15;
+  uint32 msg_index = 16;                    // message index in the tx body (0 for kind 1)
+  google.protobuf.Timestamp block_time = 17;
+  bytes  blob_id = 18;                      // 33 B, derived from the promise; readers recheck
+  string error = 19;                        // reason for unrecoverable, empty otherwise
+  reserved 20 to 29;                        // proof stage (e.g. tx result code)
+}

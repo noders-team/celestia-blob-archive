@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Celestia Blob Archive</title>
+<meta name="description" content="Celestia forgets blob data after a month, Fibre after four hours. The archive keeps every blob from Mainnet Beta and Mocha, each with its proof against the chain.">
+<meta name="theme-color" content="#040207">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..600&family=Hanken+Grotesk:wght@400;500;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+<style>
+  /* ---------- hero ---------- */
+  .hero { min-height: max(700px, calc(100svh - 64px)); display: flex; flex-direction: column; overflow: hidden; }
+  .hero-art { position: relative; flex: 1 0 auto; min-height: 330px; margin-top: 8px; }
+  .hero-art canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hero-copy { text-align: center; padding-top: clamp(56px, 11vh, 132px); }
+  .hero h1 { margin: 0 auto; font-size: clamp(2.3rem, 5.2vw, 4.6rem); line-height: 1.04; }
+  .hero h1 span { display: block; }
+  .hero-copy p { max-width: 58ch; margin: 28px auto 0; font-size: clamp(1rem, 1.3vw, 1.15rem); color: var(--muted); }
+  .cta { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
+  .hero-note {
+    position: absolute; font-family: var(--mono); font-size: 0.74rem; color: var(--faint); white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity 0.8s ease 0.3s;
+  }
+  .art-ready .hero-note { opacity: 1; }
+  .hero-note[data-hero-at="forget"] { padding-bottom: 22px; }
+  .hero-note[data-hero-at="forget"]::after { content: ""; position: absolute; left: var(--tick, 50%); bottom: 0; height: 16px; border-left: 1px dashed rgba(255, 255, 255, 0.35); }
+  .hero-note[data-hero-at="keep"] { color: var(--violet-text); }
+  @media (max-width: 720px) {
+    .hero-copy { padding-top: 48px; }
+    .hero-art { margin-top: 30px; min-height: 360px; }
+    .hero h1 span { display: inline; }
+    .hero-copy p { margin-top: 20px; }
+    .cta { margin-top: 28px; }
+    .cta .pill { flex: 1 1 0; padding: 0 12px; }
+    .hero-note[data-hero-at="now"] { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .hero-note { transition: none; } }
+
+  /* ---------- why: the time axis ---------- */
+  .why .section-head { max-width: 900px; }
+  .axis-panel { padding: 36px 40px 30px; }
+  .axis-top { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; justify-content: space-between; margin-bottom: 30px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0; padding: 0; list-style: none; font-size: 0.86rem; color: var(--muted); }
+  .legend i { display: inline-block; width: 18px; height: 8px; border-radius: 2px; margin-right: 8px; vertical-align: 1px; }
+  .band-title { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 16px; margin: 0 0 8px; font-size: 0.92rem; }
+  .band-title b { font-weight: 500; }
+  .band-title span { color: var(--faint); }
+  .axis-foot { margin: 22px 0 0; padding-top: 18px; border-top: 1px solid var(--line-soft); font-size: 0.9rem; color: var(--muted); min-height: 3.2em; }
+  .axis-foot b { color: var(--ink); font-weight: 500; }
+  @media (max-width: 720px) { .axis-panel { padding: 22px 16px 18px; border-radius: 12px; } }
+
+  /* ---------- check it (light section) ---------- */
+  .check-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 72px; align-items: center; }
+  .check-steps { list-style: none; margin: 40px 0 40px; padding: 0; counter-reset: s; display: grid; gap: 0; }
+  .check-steps li { counter-increment: s; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 0 12px; padding: 20px 0; border-top: 1px solid var(--paper-line); }
+  .check-steps li b { display: block; margin-bottom: 6px; }
+  .check-steps li::before { content: counter(s); font-family: var(--display); font-stretch: 125%; font-size: 1rem; color: var(--violet); line-height: 1.5; }
+  .check-steps b { display: block; font-weight: 600; margin-bottom: 2px; }
+  .check-steps p { margin: 0; color: var(--paper-muted); font-size: 0.97rem; }
+  .who { display: inline-block; margin-top: 8px; font-size: 0.8rem; padding: 2px 10px; border-radius: 999px; border: 1px solid #cfc8f6; color: #4b3cc0; }
+  .who.archive { border-color: #d6d4de; color: var(--paper-muted); }
+  .square-fig { margin: 0; }
+  .square-fig svg { width: 100%; height: auto; display: block; }
+  .square-fig figcaption { margin-top: 14px; font-size: 0.86rem; color: var(--paper-muted); }
+  @media (max-width: 900px) { .check-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; } .square-fig { order: -1; max-width: 420px; } }
+
+  /* ---------- live ---------- */
+  .live { position: relative; overflow: hidden; padding: 0; }
+  .live .sphere { position: absolute; right: -170px; top: 50%; transform: translateY(-50%); width: 560px; pointer-events: none; opacity: 0.45; }
+  .live-grid { display: grid; grid-template-columns: 1fr 1fr; position: relative; }
+  .live-net { padding: 36px 40px 34px; }
+  .live-net + .live-net { border-left: 1px solid var(--line); }
+  .live-net h3 { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; }
+  .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--violet-text); box-shadow: 0 0 0 0 rgba(165, 151, 255, 0.6); animation: pulse 2.4s ease-out infinite; flex: none; }
+  .pulse.stale { background: var(--faint); animation: none; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(165, 151, 255, 0.55); } 70% { box-shadow: 0 0 0 9px rgba(165, 151, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(165, 151, 255, 0); } }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+  .live-net .when { color: var(--faint); font-size: 0.85rem; margin: 6px 0 22px; }
+  .strip { position: relative; height: 10px; border-radius: 3px; overflow: hidden; background: repeating-linear-gradient(135deg, rgba(255,255,255,.13) 0 1px, transparent 1px 5px); }
+  .strip i { position: absolute; top: 0; bottom: 0; background: var(--violet); }
+  .strip-cap { display: flex; justify-content: space-between; gap: 12px; font-size: 0.8rem; color: var(--faint); margin: 8px 0 22px; }
+  .live-net dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0; margin: 0; font-size: 0.92rem; }
+  .live-net dt, .live-net dd { padding: 9px 0; border-top: 1px solid var(--line-soft); margin: 0; }
+  .live-net dt { color: var(--muted); }
+  .live-net dd { font-family: var(--mono); font-size: 0.84rem; text-align: right; }
+  .live-net dd a { text-decoration-color: rgba(165, 151, 255, 0.5); }
+  @media (max-width: 860px) {
+    .live-grid { grid-template-columns: minmax(0, 1fr); }
+    .live-net { padding: 26px 18px; }
+    .live-net + .live-net { border-left: 0; border-top: 1px solid var(--line); }
+    .live .sphere { display: none; }
+  }
+
+  /* ---------- three paths ---------- */
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .card { display: flex; flex-direction: column; background: var(--bg-raise); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .card .ill { height: 230px; border-bottom: 1px solid var(--line); display: grid; place-items: center; background: radial-gradient(ellipse at 50% 60%, rgba(124, 104, 242, 0.07), transparent 70%); }
+  .card .ill svg { width: 78%; height: 82%; }
+  .card .body { padding: 26px 26px 28px; display: flex; flex-direction: column; flex: 1; }
+  .card h3 { margin-bottom: 12px; }
+  .card p { color: var(--muted); font-size: 0.95rem; flex: 1; }
+  .card .pill { align-self: flex-start; margin-top: 8px; }
+  @media (max-width: 900px) { .cards { grid-template-columns: minmax(0, 1fr); } .card .ill { height: 190px; } }
+</style>
+<script>(function(d){d.classList.add("fl");var done=function(){d.classList.remove("fl")};setTimeout(done,900);if(d.fonts||document.fonts){var f=document.fonts;Promise.all([f.load("500 1em Archivo"),f.load("400 1em \"Hanken Grotesk\"")]).then(done,done)}})(document.documentElement)</script>
+</head>
+<body>
+<header class="top" data-ph aria-hidden="true"><div class="wrap"></div></header>
+<main>
+  <section class="hero" aria-labelledby="hero-h">
+    <div class="hero-copy wrap">
+      <h1 id="hero-h"><span>Celestia forgets.</span> <span>The archive remembers.</span></h1>
+      <p>Celestia nodes drop blob data after about 30 days, Fibre validators after 4 hours. This archive keeps every blob from Mainnet Beta and Mocha, each with the proof that ties it to its block.</p>
+      <div class="cta">
+        <a class="pill" href="block.html" data-net-link>Look up a block</a>
+        <a class="pill ghost" href="use.html" data-net-link>Use the archive</a>
+      </div>
+    </div>
+    <div class="hero-art">
+      <canvas id="hero-art" aria-hidden="true"></canvas>
+      <span class="hero-note" data-hero-at="forget" aria-hidden="true">Nodes prune here, after about 30 days</span>
+      <span class="hero-note" data-hero-at="keep" aria-hidden="true">The archive keeps every share</span>
+      <span class="hero-note" data-hero-at="now" aria-hidden="true">Now</span>
+    </div>
+  </section>
+
+  <section class="section why" aria-labelledby="why-h">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker">Why it exists</p>
+        <h2 id="why-h">The network keeps a month. Fibre keeps four hours. The archive keeps all of it.</h2>
+        <p class="lede">Each band below is the same chain at a different zoom. Point at any moment to see which height it was; click to open that block.</p>
+      </div>
+      <div class="panel axis-panel">
+        <div class="axis-top">
+          <ul class="legend">
+            <li><i style="background:var(--archive)"></i>In the archive</li>
+            <li><i style="background:repeating-linear-gradient(135deg,rgba(255,255,255,.35) 0 1px,transparent 1px 4px)"></i>Not archived yet</li>
+            <li><i style="background:var(--network)"></i>Still on Celestia nodes</li>
+            <li><i style="background:var(--fibre)"></i>Still on Fibre validators</li>
+          </ul>
+          <div class="netswitch" role="group" aria-label="Network shown in the bands" id="axis-net"></div>
+        </div>
+        <div class="band-title"><b>Whole history</b><span id="a-range"></span></div>
+        <div id="bandA"></div>
+        <div id="lensAB"></div>
+        <div class="band-title"><b>Last 45 days</b><span>nodes have pruned everything left of the line</span></div>
+        <div id="bandB"></div>
+        <div id="lensBC"></div>
+        <div class="band-title"><b>Last 8 hours</b><span>Fibre keeps only the right half</span></div>
+        <div id="bandC"></div>
+        <p class="axis-foot" id="axis-foot" role="status"><span class="loading">Reading the archive’s catalog</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section on-paper check" aria-labelledby="check-h">
+    <div class="wrap check-grid">
+      <div>
+        <p class="kicker">Proof, not promises</p>
+        <h2 id="check-h">Don’t trust us. Check it.</h2>
+        <p class="lede" style="margin-top:22px">Every archived blob is stored with its share proof against the block’s data root. The block page runs the checks in your browser and tells you who checked each step.</p>
+        <ol class="check-steps">
+          <li><div><b>The bytes match what was paid for</b><p>Your browser lays the blob out as 512-byte shares and recomputes its share commitment.</p><span class="who">Your browser</span></div></li>
+          <li><div><b>The shares produce the row roots</b><p>It hashes the shares into their rows of the data square, using the sibling hashes from the proof.</p><span class="who">Your browser</span></div></li>
+          <li><div><b>The row roots are under the data root</b><p>The archive checks this before it serves a blob; <code>cba verify</code> repeats it against a node you run.</p><span class="who archive">The archive, or your node</span></div></li>
+          <li><div><b>The data root is in the signed block</b><p>Your browser rebuilds the block hash from the header and compares it with the hash validators signed.</p><span class="who">Your browser</span></div></li>
+        </ol>
+        <a class="pill" id="check-link" href="block.html?net=mainnet&amp;h=1435254&amp;ns=AAAAAAAAAAAAAAAAAAAAAAAAALz67w0250KL770%3D">Check a blob from 2024</a>
+      </div>
+      <figure class="square-fig">
+        <svg id="square-ill" viewBox="0 0 420 440" role="img" aria-label="A data square of 8 by 8 shares extended with parity to 16 by 16. One blob takes four shares in row 3; the proof gives that row's root."></svg>
+        <figcaption>Height 1,435,254 was pruned by Celestia nodes in 2024. Its blob is still here, and still checks out.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section live-sec" aria-labelledby="live-h">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker">Live</p>
+        <h2 id="live-h">Both networks, right now.</h2>
+      </div>
+      <div class="panel live">
+        <div class="sphere" id="live-sphere"></div>
+        <div class="live-grid" id="live-grid">
+          <div class="live-net" data-n="mainnet"><h3><span class="pulse stale"></span>Mainnet Beta</h3><p class="when loading">Reading the manifest</p></div>
+          <div class="live-net" data-n="mocha"><h3><span class="pulse stale"></span>Mocha testnet</h3><p class="when loading">Reading the manifest</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section paths" aria-labelledby="paths-h">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="paths-h">Built for the people who need old blobs.</h2>
+      </div>
+      <div class="cards">
+        <article class="card">
+          <div class="ill" aria-hidden="true"><svg viewBox="0 0 300 200" fill="none" stroke-width="1">
+            <g stroke="rgba(253,252,255,.55)">
+              <path d="M150 22 L230 52 L150 82 L70 52 Z"/><path d="M150 52 L230 82 L150 112 L70 82 Z" opacity=".75"/><path d="M150 82 L230 112 L150 142 L70 112 Z" opacity=".5"/>
+            </g>
+            <g stroke="#7c68f2"><path d="M70 52v60M230 52v60M150 82v60" stroke-dasharray="2 4"/>
+              <path d="M40 168h220M40 182h220M60 160v30M90 160v30M120 160v30M150 160v30M180 160v30M210 160v30M240 160v30" opacity=".6"/></g>
+            <path d="M150 142 L150 168" stroke="#a597ff"/><rect x="146" y="171" width="8" height="8" fill="#a597ff"/>
+          </svg></div>
+          <div class="body">
+            <h3>OP Stack rollups</h3>
+            <p id="op-text">op-alt-da reads the archive through its S3 fallback once Celestia has pruned, so a rollup can still re-derive its chain from the first block.</p>
+            <a class="pill ghost small" href="use.html#op" data-net-link>Set up the fallback</a>
+          </div>
+        </article>
+        <article class="card">
+          <div class="ill" aria-hidden="true"><svg viewBox="0 0 300 200" fill="none" stroke-width="1" id="fibre-ill"></svg></div>
+          <div class="body">
+            <h3>Fibre capture</h3>
+            <p id="fibre-text">Fibre blobs stay on validators for four hours. The archive fetches each one inside that window, checks it against the paid commitment and keeps it with the validators’ signatures.</p>
+            <a class="pill ghost small" href="fibre.html?net=mocha">See the captures</a>
+          </div>
+        </article>
+        <article class="card">
+          <div class="ill" aria-hidden="true"><svg viewBox="0 0 300 200" fill="none" stroke-width="1" id="removal-ill"></svg></div>
+          <div class="body">
+            <h3>Removals</h3>
+            <p>When there is a legal reason, we withdraw a blob from the archive and list it publicly in <code>tombstones.json</code>. Write to abuse@noders.team.</p>
+            <a class="pill ghost small" href="removals.html" data-net-link>Read the policy</a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+</main>
+<script type="module">
+// Smooth, inertial wheel scrolling (Lenis, vendored as an ES module so it adds no globals).
+// Inner scrollers (tables, code) keep native scrolling; anchor links glide and stop below the
+// sticky header. Off with reduced motion.
+import Lenis from "./vendor/lenis.esm.js";
+if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  window.lenis = new Lenis({ lerp: 0.1, smoothWheel: true, allowNestedScroll: true, anchors: { offset: -80 }, autoRaf: true });
+}
+</script>
+<script src="site.js"></script>
+<script src="hero.js"></script>
+<script>
+"use strict";
+chrome("index.html");
+
+/* ---------- static illustrations ---------- */
+(function squareIll() {
+  // 8x8 original square (top-left) extended to 16x16; one blob in row 3, cols 2..5
+  const k = 8, e = 16, c = 22, ox = 18, oy = 34;
+  let s = `<text x="${ox}" y="20" font-size="12" fill="#545766" font-family="Hanken Grotesk, sans-serif">original data</text>
+    <text x="${ox + k * c + 4}" y="20" font-size="12" fill="#545766" font-family="Hanken Grotesk, sans-serif">parity</text>`;
+  const txCells = 9, others = [[0, 1, 4], [1, 6, 2], [2, 2, 4], [4, 0, 8], [5, 0, 3]];
+  const kind = (x, y) => {
+    if (x >= k || y >= k) return "par";
+    const i = y * k + x;
+    if (i < txCells) return "tx";
+    if (y === 3 && x >= 2 && x <= 5) return "blob";
+    if (others.some(([r, a, n]) => r === y && x >= a && x < a + n)) return "other";
+    return y > 5 ? "pad" : (i % 7 === 0 ? "pad" : "other");
+  };
+  const fill = { tx: "#c9c4dc", blob: "#7c68f2", other: "#e4e0f7", pad: "#ffffff", par: "#f1f0f5" };
+  for (let y = 0; y < e; y++) for (let x = 0; x < e; x++) {
+    const kd = kind(x, y);
+    const dim = y !== 3 && kd !== "blob" ? 1 : 1;
+    s += `<rect x="${ox + x * c + 1}" y="${oy + y * c + 1}" width="${c - 2}" height="${c - 2}" rx="2" fill="${fill[kd]}" stroke="${kd === "pad" ? "#e3e1ec" : "none"}" opacity="${dim}"/>`;
+  }
+  s += `<rect x="${ox + 0.5}" y="${oy + 3 * c + 0.5}" width="${e * c - 1}" height="${c - 1}" fill="none" stroke="#0a0810" stroke-width="1" rx="3"/>`;
+  s += `<path d="M${ox + k * c} ${oy} v${e * c} M${ox} ${oy + k * c} h${e * c}" stroke="#0a0810" stroke-opacity=".25"/>`;
+  s += `<path d="M${ox + e * c + 4} ${oy + 3 * c + 2} h5 v${c - 4} h-5" fill="none" stroke="#7c68f2" stroke-width="1.5"/>`;
+  s += `<text x="${ox + 2}" y="${oy + e * c + 24}" font-size="12" fill="#545766" font-family="Hanken Grotesk, sans-serif">The blob’s four shares sit in row 3; the proof yields that row’s root.</text>`;
+  document.getElementById("square-ill").innerHTML = s;
+})();
+(function fibreIll() {
+  let s = `<ellipse cx="46" cy="100" rx="14" ry="44" stroke="rgba(253,252,255,.6)"/><ellipse cx="254" cy="100" rx="14" ry="44" stroke="rgba(253,252,255,.25)"/>`;
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2, y = 100 + 38 * Math.sin(a), y2 = 100 + 38 * Math.sin(a + 1.2);
+    s += `<path d="M46 ${y.toFixed(1)} C 120 ${(y2).toFixed(1)}, 180 ${(200 - y2).toFixed(1)}, 254 ${(200 - y).toFixed(1)}" stroke="url(#fg)"/>`;
+  }
+  s = `<defs><linearGradient id="fg" x1="0" x2="1"><stop offset="0" stop-color="#fdfcff" stop-opacity=".85"/><stop offset=".55" stop-color="#a597ff" stop-opacity=".55"/><stop offset="1" stop-color="#7c68f2" stop-opacity=".08"/></linearGradient></defs>` + s;
+  s += `<path d="M150 168 a 18 18 0 1 1 0.1 0" stroke="rgba(253,252,255,.25)"/><path d="M150 168 a 18 18 0 0 1 -15.6 -27" stroke="#a597ff" stroke-width="1.6" transform="rotate(180 150 150)"/>`;
+  s += `<text x="176" y="155" font-size="11" fill="rgba(253,252,255,.5)" font-family="Roboto Mono, monospace">4 h</text>`;
+  document.getElementById("fibre-ill").innerHTML = s;
+})();
+(function removalIll() {
+  let s = "";
+  const cols = 9, rows = 5, c = 22, ox = 51, oy = 45;
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    const gone = x === 5 && y === 2;
+    s += gone
+      ? `<rect x="${ox + x * c + 2}" y="${oy + y * c + 2}" width="${c - 4}" height="${c - 4}" rx="2" stroke="#a597ff" stroke-dasharray="2 2.5"/>`
+      : `<rect x="${ox + x * c + 2}" y="${oy + y * c + 2}" width="${c - 4}" height="${c - 4}" rx="2" stroke="rgba(253,252,255,${(0.18 + 0.4 * ((x * 7 + y * 3) % 5) / 5).toFixed(2)})"/>`;
+  }
+  s += `<path d="M${ox + 5 * c + 11} ${oy + 2 * c + 22} V172 H226" stroke="#a597ff" stroke-opacity=".6"/>`;
+  s += `<text x="232" y="176" font-size="11" fill="rgba(253,252,255,.5)" font-family="Roboto Mono, monospace">listed</text>`;
+  document.getElementById("removal-ill").innerHTML = s;
+})();
+document.getElementById("live-sphere").innerHTML = sphereSVG({ size: 560, opacity: 0.8 });
+
+/* ---------- the time axis (logic from direction B) ---------- */
+let axisNet = net();
+function axisSwitch() {
+  const box = document.getElementById("axis-net");
+  box.innerHTML = Object.entries(NETS).map(([k, v]) => `<button type="button" data-k="${k}" aria-pressed="${k === axisNet}">${v.short}</button>`).join("");
+  box.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { axisNet = b.dataset.k; axisSwitch(); drawAxis(); }));
+}
+async function fibreRecent(n, S, fromT) {
+  const f = await fibreManifest(n).catch(() => null);
+  if (!f) return [];
+  const lo = Math.max(f.first_height, S.clock.h(fromT)), hi = f.scanned_until, out = [];
+  for (let b = Math.floor((lo - 1) / 10000); b <= Math.floor((hi - 1) / 10000); b++) {
+    const j = await getJSON(`/data/${n}/fibre/index/${String(b).padStart(8, "0")}.json`, { allow404: true }).catch(() => null);
+    if (j) out.push(...j.entries);
+  }
+  return out;
+}
+let axisToken = 0;
+async function drawAxis() {
+  const n = axisNet, tok = ++axisToken;
+  const foot = $("#axis-foot");
+  foot.innerHTML = `<span class="loading">Reading the ${esc(NETS[n].short)} catalog</span>`;
+  let drawn = false;
+  quickState(n).then((q) => { if (!drawn && tok === axisToken) renderAxis(q, tok); }).catch(() => {});
+  try { const S = await netState(n); if (tok !== axisToken) return; drawn = true; renderAxis(S, tok); }
+  catch (e) { if (tok === axisToken) foot.innerHTML = `<span class="err">The archive’s catalog could not be read (${esc(e.message)}).</span> The bands may be incomplete; reload in a minute, or open a height on the block page.`; }
+}
+function renderAxis(S, tok) {
+  const { m, cat, clock, now, n } = S, N = NETS[n];
+  $("#a-range").textContent = `${fmtDate(clock.genesis)} to now, ${fmtN(S.chainHead)} heights`;
+  const contigT = clock.t(m.contiguous_until);
+  let liveStart = null;
+  for (let i = cat.ranges.length - 1; i > 0; i--) { liveStart = cat.ranges[i][0]; if (cat.ranges[i][0] - cat.ranges[i - 1][1] > 10000) break; }
+  const backfillNote = m.contiguous_until >= m.highest_height - 20000 ? null
+    : n === "mainnet" ? { t: contigT, lane: "archive", text: `Backfill has reached ${fmtDate(contigT)}`, short: "Backfill" }
+    : { t: contigT, lane: "archive", text: "Still filling a gap here", short: "Gap" };
+  timeline($("#bandA"), { S, from: clock.genesis, to: now, lanes: ["archive", "network"], laneH: 12,
+    notes: backfillNote ? [backfillNote] : [], ariaLabel: `${N.label}, whole history. Arrow keys move through time, Enter opens the block.` });
+  const bFrom = now - 45 * DAY;
+  lens($("#lensAB"), clock.genesis, now, bFrom, now);
+  const notesB = [{ t: now - NETWORK_WINDOW, lane: "network", text: "Nodes have pruned everything left of this line", short: "Pruned to the left" }];
+  if (!S.provisional && liveStart && clock.t(liveStart) > bFrom) notesB.push({ t: clock.t(liveStart), lane: "archive", text: `Live capture since ${fmtDate(clock.t(liveStart))}`, short: "Live capture" });
+  timeline($("#bandB"), { S, from: bFrom, to: now, lanes: ["archive", "network"], laneH: 12, notes: notesB,
+    ariaLabel: `${N.label}, last 45 days. Arrow keys move through time, Enter opens the block.` });
+  const cFrom = now - 8 * HOUR;
+  lens($("#lensBC"), bFrom, now, cFrom, now);
+  const bandC = timeline($("#bandC"), { S, from: cFrom, to: now, lanes: ["archive", "network", "fibre"], laneH: 12,
+    notes: [{ t: now - FIBRE_WINDOW, lane: "fibre", text: "Fibre data is gone 4 hours after its block", short: "4 hours" }],
+    ariaLabel: `${N.label}, last 8 hours. Arrow keys move through time, Enter opens the block.` });
+  if (S.provisional) return;
+  fibreRecent(n, S, cFrom).then((fibre) => fibre.length && tok === axisToken && bandC.set({ fibre }));
+  const pct = (100 * cat.heights) / m.highest_height;
+  $("#axis-foot").innerHTML = n === "mainnet"
+    ? `The archive holds <b>${fmtN(cat.heights)}</b> of ${fmtN(m.highest_height)} Mainnet heights (${pct.toFixed(1)}%): every block from genesis to ${fmtN(m.contiguous_until)} (${fmtDate(contigT)}), and every new block as it is made${liveStart ? ` since ${fmtDate(clock.t(liveStart))}` : ""}. The backfill is working through the years in between. <a href="${withNet("coverage.html", n)}">See every range</a>.`
+    : `The archive holds <b>${fmtN(cat.heights)}</b> of ${fmtN(m.highest_height)} Mocha heights (${pct.toFixed(1)}%), from genesis to the head${cat.ranges.length > 1 ? `, with ${cat.ranges.length - 1 === 1 ? "one gap" : `${cat.ranges.length - 1} gaps`} still to fill` : ""}. <a href="${withNet("coverage.html", n)}">See every range</a>.`;
+}
+axisSwitch(); drawAxis();
+
+/* ---------- live panel ---------- */
+async function live(n) {
+  const box = document.querySelector(`.live-net[data-n="${n}"]`), N = NETS[n];
+  let m, f, S;
+  try { [m, f] = await Promise.all([manifest(n), fibreManifest(n).catch(() => null)]); }
+  catch (e) { box.querySelector(".when").outerHTML = `<p class="when err">The ${esc(N.short)} manifest could not be read. Reload in a minute.</p>`; return; }
+  const age = Date.now() - Date.parse(m.updated_at), fresh = age < 30 * 60e3;
+  const fibreKept = f ? (f.counts && f.counts.archived) || 0 : null;
+  const render = (S) => {
+    const head = S ? S.chainHead : m.highest_height;
+    const ranges = S ? S.cat.ranges : [[1, m.contiguous_until], [m.highest_height, m.highest_height]];
+    const heights = S ? S.cat.heights : null;
+    box.innerHTML = `<h3><span class="pulse${fresh ? "" : " stale"}" aria-hidden="true"></span>${esc(N.label)}</h3>
+      <p class="when">Archive updated ${fmtSpan(age)} ago${fresh ? "" : ", later than usual"}</p>
+      <div class="strip" role="img" aria-label="Archived heights from genesis to the head">${ranges.map(([a, b]) =>
+        `<i style="left:${((100 * (a - 1)) / head).toFixed(3)}%;width:${Math.max(0.25, (100 * (b - a + 1)) / head).toFixed(3)}%"></i>`).join("")}</div>
+      <div class="strip-cap"><span>Genesis</span><span>${heights != null ? `${((100 * heights) / m.highest_height).toFixed(1)}% of heights archived` : "Reading the catalog"}</span><span>Now</span></div>
+      <dl>
+        <dt>Newest archived height</dt><dd><a href="${withNet(`block.html?h=${m.highest_height}`, n)}">${fmtN(m.highest_height)}</a></dd>
+        <dt>Gapless from genesis to</dt><dd><a href="${withNet(`block.html?h=${m.contiguous_until}`, n)}">${fmtN(m.contiguous_until)}</a></dd>
+        <dt>Stored</dt><dd>${S ? `${fmtBytes(S.cat.bytes)}` : "…"}</dd>
+        <dt>Fibre payloads kept</dt><dd>${fibreKept == null ? "not running" : fibreKept ? `<a href="${withNet("fibre.html", n)}">${fmtN(fibreKept)}</a>, ${fmtBytes(f.bytes_archived || 0)}` : "none posted yet"}</dd>
+      </dl>`;
+  };
+  render(null);
+  try { S = await netState(n); render(S); } catch { /* the manifest view stays; coverage page has the detail */ }
+}
+live("mainnet"); live("mocha");
+getJSON("/data/mainnet/op.json", { allow404: true }).then((j) => {
+  const c = j && j.namespaces ? j.namespaces.length : 0;
+  if (c) $("#op-text").textContent = `op-alt-da reads the archive through its S3 fallback once Celestia has pruned. ${c} Mainnet rollup namespaces are kept under its keys, so they can re-derive from the first block.`;
+}).catch(() => {});
+</script>
+</body>
+</html>

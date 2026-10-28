@@ -1,0 +1,112 @@
+// Public on-disk format of the Celestia blob archive.
+//
+// A segment file is a concatenation of frames. Each frame is an unsigned
+// varint (LEB128, as in protobuf) giving the byte length N, followed by N
+// bytes of a marshaled Record. Index entries point at the Record bytes
+// (after the varint), so one HTTP Range request returns exactly one Record.
+syntax = "proto3";
+
+package archive.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Record is one frame of a segment.
+message Record {
+  oneof kind {
+    HeightRecord height = 1;
+    BlobRecord blob = 2;
+    TombstoneRecord tombstone = 3;
+  }
+  // Set only on tombstone records; readers ignore it. It exists only to make
+  // a tombstone exactly as long as the blob record it replaces: the Record's
+  // own length prefix for the tombstone skips one length at every varint
+  // boundary, which padding inside the tombstone cannot fill.
+  uint64 filler = 15;
+}
+
+// TombstoneRecord replaces a withdrawn BlobRecord in place. Its Record bytes
+// have exactly the length of the replaced record (see padding and
+// Record.filler), which keeps every offset of the segment unchanged.
+message TombstoneRecord {
+  // Height, namespace, commitment and share range of the withdrawn blob.
+  uint64 height = 1;
+  bytes namespace = 2;
+  bytes commitment = 3;
+  uint32 share_start = 4;
+  uint32 share_end = 5;
+  // Zero bytes that pad the record to the replaced length; readers ignore it.
+  bytes padding = 15;
+}
+
+// HeightRecord describes one block and carries what is needed to verify it.
+message HeightRecord {
+  // Block height.
+  uint64 height = 1;
+  // Block time from the header.
+  google.protobuf.Timestamp time = 2;
+  // App version from the block header (Header.Version.App).
+  uint64 app_version = 3;
+  // Header.DataHash: the data availability root the share proofs verify against.
+  bytes data_hash = 4;
+  // Width of the original data square (shares per row).
+  uint64 square_size = 5;
+  // Number of BlobRecords archived for this height.
+  uint32 blob_count = 6;
+  // Marshaled tendermint.types.Header of this height.
+  bytes header = 7;
+  // Marshaled tendermint.types.Commit for this height, taken from the
+  // LastCommit of block height+1.
+  bytes commit = 8;
+}
+
+// BlobRecord is one blob with its inclusion proof.
+message BlobRecord {
+  // Block height containing the blob.
+  uint64 height = 1;
+  // Index of the PayForBlobs transaction within the block's transactions.
+  uint32 tx_index = 2;
+  // Index of the blob within that transaction.
+  uint32 blob_index = 3;
+  // Namespace, 29 bytes: 1 byte version followed by the 28 byte id.
+  bytes namespace = 4;
+  // Share version of the blob.
+  uint32 share_version = 5;
+  // Raw blob data.
+  bytes data = 6;
+  // 32-byte share commitment of the blob.
+  bytes commitment = 7;
+  // Signer address of the blob (empty for share version 0).
+  bytes signer = 8;
+  // Start of the blob's half-open share range [share_start, share_end) in the
+  // original data square, as a row-major share index.
+  uint32 share_start = 9;
+  // Exclusive end of the share range; see share_start.
+  uint32 share_end = 10;
+  // Marshaled celestia-app proof.ShareProof proving the shares in
+  // [share_start, share_end) against HeightRecord.data_hash.
+  bytes share_proof = 11;
+}
+
+// IndexEntry locates one Record inside a segment.
+message IndexEntry {
+  // Block height of the record.
+  uint64 height = 1;
+  // Namespace (29 bytes) for blob entries; empty for height entries.
+  bytes namespace = 2;
+  // Share commitment (32 bytes) for blob entries; empty for height entries.
+  bytes commitment = 3;
+  // Byte offset of the Record protobuf bytes within the segment (after the
+  // length varint).
+  uint64 offset = 4;
+  // Length in bytes of the Record protobuf bytes.
+  uint32 length = 5;
+  // Record kind: 1 = height, 2 = blob.
+  uint32 kind = 6;
+}
+
+// SegmentIndex lists every Record of one segment.
+message SegmentIndex {
+  uint64 first_height = 1;
+  uint64 last_height = 2;
+  repeated IndexEntry entries = 3;
+}
