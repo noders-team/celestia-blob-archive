@@ -44,14 +44,7 @@ func newBlobRangeFinder(txs [][]byte, appVersion uint64) (blobRangeFinder, error
 		if err != nil {
 			return nil, fmt.Errorf("go-square v2 builder: %w", err)
 		}
-		return func(txIndex, blobIndex int) (int, int, error) {
-			start, err := b.FindBlobStartingIndex(txIndex, blobIndex)
-			if err != nil {
-				return 0, 0, err
-			}
-			n, err := b.BlobShareLength(txIndex, blobIndex)
-			return start, start + n, err
-		}, nil
+		return v2BlobRanges(b)
 	case 6, 7:
 		b, err := squarev3.NewBuilder(appconsts.SquareSizeUpperBound, appconsts.SubtreeRootThreshold, txs...)
 		if err != nil {
@@ -83,6 +76,42 @@ func newBlobRangeFinder(txs [][]byte, appVersion uint64) (blobRangeFinder, error
 			return start, start + n, err
 		}, nil
 	}
+}
+
+// v2BlobRanges corrects go-square v2's share indexes for share version 1
+// blobs. Its builder sizes every blob with SparseSharesNeeded(len(data)),
+// ignoring the 20-byte signer in the first share, while the sparse share
+// splitter writes the signer: such a blob can take one share more than the
+// builder reserved. Export computes padding and starting indexes from the
+// reserved sizes but writes shares back to back, so every later blob in the
+// square sits as many shares further as the earlier blobs overran (the
+// IndexWrapper share indexes committed in the square are off the same way).
+// go-square v3 fixed the size by passing HasSigner.
+func v2BlobRanges(b *squarev2.Builder) (blobRangeFinder, error) {
+	if _, err := b.Export(); err != nil {
+		return nil, fmt.Errorf("go-square v2 export: %w", err)
+	}
+	type blobKey struct{ pfb, blob int }
+	type blobRange struct{ start, end int }
+	ranges := make(map[blobKey]blobRange, len(b.Blobs))
+	shift := 0
+	// After Export, b.Blobs is in square order.
+	for _, e := range b.Blobs {
+		start, err := b.FindBlobStartingIndex(len(b.Txs)+e.PfbIndex, e.BlobIndex)
+		if err != nil {
+			return nil, err
+		}
+		n := share.SparseSharesNeeded(uint32(len(e.Blob.Data())), len(e.Blob.Signer()) > 0)
+		ranges[blobKey{e.PfbIndex, e.BlobIndex}] = blobRange{start + shift, start + shift + n}
+		shift += n - e.NumShares
+	}
+	return func(txIndex, blobIndex int) (int, int, error) {
+		r, ok := ranges[blobKey{txIndex - len(b.Txs), blobIndex}]
+		if !ok {
+			return 0, 0, fmt.Errorf("tx %d blob %d is not a blob in the square", txIndex, blobIndex)
+		}
+		return r.start, r.end, nil
+	}, nil
 }
 
 // verifyBlobShares checks that ods[start:end] is exactly the blob: the first
